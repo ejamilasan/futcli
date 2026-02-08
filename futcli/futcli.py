@@ -5,7 +5,7 @@ import pkg_resources
 from tabulate import tabulate
 
 from .evolutions import get_evolution_items
-from .sbc import get_sbc_items, get_sbc_types
+from .sbc import get_sbc_items
 
 try:
     version = pkg_resources.require("futcli")[0].version
@@ -68,7 +68,8 @@ def futcli():
     subparsers = parser.add_subparsers(
         dest="data_type", title="args", metavar="[sbc.{options}, evolutions]"
     )
-    for sbc_type in get_sbc_types():
+    sbc_categories = ["challenges", "foundations", "icons", "players", "swaps", "upgrades"]
+    for sbc_type in sbc_categories:
         subparsers.add_parser(f"sbc.{sbc_type}", help=f"Outputs list of SBC {sbc_type}")
     subparsers.add_parser("sbc", help="Outputs list of all SBC types")
     subparsers.add_parser("evolutions", help="Outputs list of all active Evolutions")

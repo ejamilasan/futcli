@@ -1,65 +1,56 @@
-from bs4 import BeautifulSoup
+from .urls import get_json
 
-from .urls import get_html
+API_URL = "https://www.fut.gg/api/fut/sbc/"
 
-scraperUrl = "https://www.fut.gg/sbc"
-htmlContent = get_html(scraperUrl)
+_cached_items = None
+
+
+def _fetch_all_sbc_items():
+    """Paginate through all SBC API pages and return all items."""
+    global _cached_items
+    if _cached_items is not None:
+        return _cached_items
+
+    all_items = []
+    page = 1
+    while True:
+        data = get_json(f"{API_URL}?page={page}")
+        if data is None:
+            break
+        all_items.extend(data.get("data", []))
+        if data.get("next") is None:
+            break
+        page = data["next"]
+
+    _cached_items = all_items
+    return _cached_items
 
 
 def get_sbc_types():
-    """Extract SBC types from HTML content."""
-    if htmlContent:
-        soup = BeautifulSoup(htmlContent, "html.parser")
-        sbc_links = soup.find_all("a", href=lambda href: href and "/sbc/" in href)
-        sbc_options = {link["href"].split("/")[2].strip() for link in sbc_links}
-        sbc_options_list = [option for option in sbc_options if option]
-        return sbc_options_list
-    return []
-
-
-def get_sbc_item_properties(link):
-    """Extract properties of an SBC item from HTML."""
-    sbc_name = link.find("h2").text.strip()
-    new_element = link.find("div", class_="self-end").text.strip()
-    new_item = "yes" if "new" in new_element.lower() else "no"
-    sbc_price = link.find("div", class_="self-end").text.replace("New", "").strip()
-    sbc_expiration = (
-        link.find("span", string="Expires In").find_next_sibling("span").text.strip()
-    )
-    sbc_challenges = (
-        link.find("span", string="Challenges").find_next_sibling("span").text.strip()
-    )
-    sbc_repeatable = (
-        link.find("span", string="Repeatable").find_next_sibling("span").text.strip()
-    )
-    sbc_refresh = (
-        link.find("span", string="Refreshes In").find_next_sibling("span").text.strip()
-    )
-
-    return {
-        "Name": sbc_name,
-        "New": new_item,
-        "Price": sbc_price,
-        "Expiration": sbc_expiration,
-        "Challenges": sbc_challenges,
-        "Repeatable": sbc_repeatable,
-        "Refreshes": sbc_refresh,
-    }
+    """Derive SBC category slugs from API data."""
+    items = _fetch_all_sbc_items()
+    return sorted({item["category"]["slug"] for item in items})
 
 
 def get_sbc_items():
-    """Extract SBC items and their properties."""
-    if htmlContent:
-        soup = BeautifulSoup(htmlContent, "html.parser")
-        sbc_links = soup.find_all("div", class_="bg-dark-gray")
-        sbc_data = {}
+    """Group SBC items by category with formatted fields."""
+    items = _fetch_all_sbc_items()
+    sbc_data = {}
 
-        for link in sbc_links:
-            for sbc_type in get_sbc_types():
-                if f"/sbc/{sbc_type}" in link.find("a")["href"]:
-                    sbc_data.setdefault(sbc_type, []).append(
-                        get_sbc_item_properties(link)
-                    )
+    for item in items:
+        category = item["category"]["slug"]
+        cost = item.get("cost", 0)
+        repeatable = item.get("repeatabilityMode", "no")
+        refresh_text = item.get("repeatRefreshIntervalText") or "-"
 
-        return sbc_data
-    return {}
+        sbc_data.setdefault(category, []).append({
+            "Name": item["name"],
+            "New": "yes" if item.get("isNew") else "no",
+            "Price": f"{cost:,}" if cost else "0",
+            "Expiration": item.get("expiresIn", "-"),
+            "Challenges": str(item.get("challengesCount", 0)),
+            "Repeatable": repeatable,
+            "Refreshes": refresh_text,
+        })
+
+    return sbc_data
