@@ -5,7 +5,7 @@ with open("README.md", "r", encoding="utf-8") as readme_file:
 
 setup(
     name="futcli",
-    version="0.1.2",
+    version="0.2.0",
     description="A command-line interface tool for fetching FC Ultimate Team data (futgg scraper)",
     long_description=long_description,
     long_description_content_type="text/markdown",
@@ -15,7 +15,6 @@ setup(
     packages=find_packages(),
     install_requires=[
         "requests",
-        "beautifulsoup4",
         "tabulate",
     ],
     entry_points={

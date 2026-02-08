@@ -64,11 +64,11 @@ options:
 
 args:
   [sbc.{options}, evolutions]
-    sbc.icons           Outputs list of SBC icons
-    sbc.foundations     Outputs list of SBC foundations
-    sbc.exchanges       Outputs list of SBC exchanges
-    sbc.players         Outputs list of SBC players
     sbc.challenges      Outputs list of SBC challenges
+    sbc.foundations     Outputs list of SBC foundations
+    sbc.icons           Outputs list of SBC icons
+    sbc.players         Outputs list of SBC players
+    sbc.swaps           Outputs list of SBC swaps
     sbc.upgrades        Outputs list of SBC upgrades
     sbc                 Outputs list of all SBC types
     evolutions          Outputs list of all active Evolutions
@@ -76,8 +76,7 @@ args:
 
 ## Dependencies
 `futcli` relies on the following Python packages:
-* **requests**: For making HTTP requests and fetching HTML content from https://www.fut.gg
-* **beautifulsoup4**: For parsing HTML content and extracting data from web pages.
+* **requests**: For making HTTP requests and fetching data from https://www.fut.gg
 * **tabulate**: For formatting data into visually appealing tables in the terminal.
 
 ## Contributing

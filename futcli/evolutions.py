@@ -1,78 +1,131 @@
+import re
 from datetime import datetime
-
-from bs4 import BeautifulSoup
 
 from .urls import get_html
 
-url = "https://www.fut.gg/evolutions"
-htmlContent = get_html(url)
+URL = "https://www.fut.gg/evolutions/"
 
 
-def get_evolution_item_properties(link):
-    """
-    Parse HTML to get the Evolution item's properties.
-    """
-    evolution_name = link.find("h2").text.strip()
+def _extract_blocks(html):
+    """Extract individual evolution blocks from the SSR-dehydrated HTML."""
+    pattern = r'\{id:\d+,game:"26",eaId:\d+,url:"/evolutions/'
+    starts = [m.start() for m in re.finditer(pattern, html)]
+    blocks = []
+    for i, start in enumerate(starts):
+        end = starts[i + 1] if i + 1 < len(starts) else start + 20000
+        blocks.append(html[start:end])
+    return blocks
 
-    evolution_price_elem = (
-        link.find("div", class_="text-sm").text.strip()
-        if link.find("div", class_="text-sm").text.strip()
-        else "FREE"
-    )
-    evolution_price = "\n".join(
-        line.strip() for line in evolution_price_elem.split("\n") if line.strip()
-    )
 
-    evolution_requirements_h3 = link.find("h3", string="Requirements").find_next("ul")
-    evolution_requirements_list_items = evolution_requirements_h3.find_all("li")
-    evolution_requirements = {
-        item.find("span", class_="text-lightest-gray")
-        .text.strip(): item.find("span", class_="text-lighter-gray")
-        .text.strip()
-        for item in evolution_requirements_list_items
+def _extract_name(block):
+    m = re.search(r'name:"([^"]+)"', block)
+    return m.group(1) if m else "Unknown"
+
+
+def _extract_price(block):
+    coins = re.search(r"coinsCost:(\d+)", block)
+    points = re.search(r"pointsCost:(\d+)", block)
+    coins_val = int(coins.group(1)) if coins else 0
+    points_val = int(points.group(1)) if points else 0
+    if coins_val == 0 and points_val == 0:
+        return "FREE"
+    parts = []
+    if coins_val > 0:
+        parts.append(f"{coins_val:,} Coins")  # noqa: E231
+    if points_val > 0:
+        parts.append(f"{points_val:,} Points")  # noqa: E231
+    return " / ".join(parts)
+
+
+def _extract_requirements(block):
+    """Extract non-null requirement fields from the requirements block."""
+    reqs = {}
+    # The requirements block starts with requirements:$R[N]={ and is very large.
+    # We search for specific fields within the block.
+    req_start = re.search(r"requirements:\$R\[\d+\]=\{", block)
+    if not req_start:
+        return reqs
+
+    # Get a large enough section from requirements start
+    req_text = block[req_start.start() : req_start.start() + 5000]
+
+    field_map = {
+        "maxOverall": "Max Overall",
+        "minOverall": "Min Overall",
+        "maxPlaystyles": "Max Playstyles",
+        "maxPlaystylesPlus": "Max Playstyles+",
     }
+    for field, label in field_map.items():
+        m = re.search(rf"{field}:(\d+)", req_text)  # noqa: E231
+        if m:
+            reqs[label] = m.group(1)
+    return reqs
 
-    evolution_upgrades_h3 = link.find("h3", string="Upgrades").find_next("ul")
-    evolution_upgrades_list_items = evolution_upgrades_h3.find_all("li")
-    evolution_upgrades = {
-        item.find_next("span", class_="text-lightest-gray")
-        .text.strip(): item.find_next("span", class_="text-green")
-        .text.strip()
-        for item in evolution_upgrades_list_items
-    }
 
-    evolution_expires_h3 = link.find("h3", string="Expires").find_next("time")
-    evolution_expires_dt_str = evolution_expires_h3["datetime"]
-    evolution_expires = datetime.strptime(
-        evolution_expires_dt_str, "%Y-%m-%dT%H:%M:%S.%f%z"
-    ).strftime("%Y-%m-%d %H:%M:%S")
+def _extract_upgrades(block):
+    """Extract upgrade labels and max values from totalUpgradesText."""
+    upgrades = {}
+    # Find the last totalUpgradesText occurrence in the block
+    all_total = list(re.finditer(r"totalUpgradesText:\$R\[\d+\]=\[", block))
+    if all_total:
+        last = all_total[-1]
+        # Extract section until the closing of the array
+        section = block[last.start() : last.start() + 3000]
+        entries = re.findall(
+            r'label:"([^"]+)",value:"([^"]*)",maxValue:"([^"]*)"', section
+        )
+        for label, value, max_value in entries:
+            display = max_value if max_value else value
+            if display:
+                upgrades[label] = display
+    return upgrades
 
-    evolution_levels = link.find("h3", string="Levels").find_next("div").text.strip()
 
-    evolution_players = (
-        link.find("h3", string="# Players").find_next("div").text.strip()
-    )
+def _extract_expiration(block):
+    m = re.search(r'endTime:"([^"]+)"', block)
+    if m:
+        dt_str = m.group(1)
+        try:
+            dt = datetime.fromisoformat(dt_str.replace("Z", "+00:00"))
+            return dt.strftime("%Y-%m-%d %H:%M:%S")
+        except ValueError:
+            return dt_str
+    return "-"
 
-    return {
-        "Name": evolution_name,
-        "Price": evolution_price,
-        "Requirements": evolution_requirements,
-        "Upgrades": evolution_upgrades,
-        "Expiration": evolution_expires,
-        "Levels": evolution_levels,
-        "Players": evolution_players,
-    }
+
+def _extract_levels(block):
+    levels = re.findall(r'idx:\d+,game:"26",challenges:', block)
+    return str(len(levels)) if levels else "0"
+
+
+def _extract_players(block):
+    m = re.search(r"numberOfPlayers:(\d+)", block)
+    return m.group(1) if m else "0"
 
 
 def get_evolution_items():
-    """
-    Fetches Evolution items.
-    """
-    if htmlContent:
-        soup = BeautifulSoup(htmlContent, "html.parser")
-        evolution_links = soup.find_all("a", class_="rounded")
-        evolutions_data = [
-            get_evolution_item_properties(link) for link in evolution_links
-        ]
-        return evolutions_data
-    return []
+    """Fetch and parse evolution items from SSR-dehydrated HTML."""
+    html = get_html(URL)
+    if not html:
+        print(
+            "Error: Could not retrieve Evolutions data. Check your network connection and try again."
+        )
+        return []
+
+    blocks = _extract_blocks(html)
+    evolutions = []
+
+    for block in blocks:
+        evolutions.append(
+            {
+                "Name": _extract_name(block),
+                "Price": _extract_price(block),
+                "Requirements": _extract_requirements(block),
+                "Upgrades": _extract_upgrades(block),
+                "Expiration": _extract_expiration(block),
+                "Levels": _extract_levels(block),
+                "Players": _extract_players(block),
+            }
+        )
+
+    return evolutions
