@@ -23,17 +23,17 @@ def _extract_name(block):
 
 
 def _extract_price(block):
-    coins = re.search(r'coinsCost:(\d+)', block)
-    points = re.search(r'pointsCost:(\d+)', block)
+    coins = re.search(r"coinsCost:(\d+)", block)
+    points = re.search(r"pointsCost:(\d+)", block)
     coins_val = int(coins.group(1)) if coins else 0
     points_val = int(points.group(1)) if points else 0
     if coins_val == 0 and points_val == 0:
         return "FREE"
     parts = []
     if coins_val > 0:
-        parts.append(f"{coins_val:,} Coins")
+        parts.append(f"{coins_val:,} Coins")  # noqa: E231
     if points_val > 0:
-        parts.append(f"{points_val:,} Points")
+        parts.append(f"{points_val:,} Points")  # noqa: E231
     return " / ".join(parts)
 
 
@@ -42,12 +42,12 @@ def _extract_requirements(block):
     reqs = {}
     # The requirements block starts with requirements:$R[N]={ and is very large.
     # We search for specific fields within the block.
-    req_start = re.search(r'requirements:\$R\[\d+\]=\{', block)
+    req_start = re.search(r"requirements:\$R\[\d+\]=\{", block)
     if not req_start:
         return reqs
 
     # Get a large enough section from requirements start
-    req_text = block[req_start.start():req_start.start() + 5000]
+    req_text = block[req_start.start() : req_start.start() + 5000]
 
     field_map = {
         "maxOverall": "Max Overall",
@@ -56,7 +56,7 @@ def _extract_requirements(block):
         "maxPlaystylesPlus": "Max Playstyles+",
     }
     for field, label in field_map.items():
-        m = re.search(rf'{field}:(\d+)', req_text)
+        m = re.search(rf"{field}:(\d+)", req_text)  # noqa: E231
         if m:
             reqs[label] = m.group(1)
     return reqs
@@ -66,11 +66,11 @@ def _extract_upgrades(block):
     """Extract upgrade labels and max values from totalUpgradesText."""
     upgrades = {}
     # Find the last totalUpgradesText occurrence in the block
-    all_total = list(re.finditer(r'totalUpgradesText:\$R\[\d+\]=\[', block))
+    all_total = list(re.finditer(r"totalUpgradesText:\$R\[\d+\]=\[", block))
     if all_total:
         last = all_total[-1]
         # Extract section until the closing of the array
-        section = block[last.start():last.start() + 3000]
+        section = block[last.start() : last.start() + 3000]
         entries = re.findall(
             r'label:"([^"]+)",value:"([^"]*)",maxValue:"([^"]*)"', section
         )
@@ -99,7 +99,7 @@ def _extract_levels(block):
 
 
 def _extract_players(block):
-    m = re.search(r'numberOfPlayers:(\d+)', block)
+    m = re.search(r"numberOfPlayers:(\d+)", block)
     return m.group(1) if m else "0"
 
 
@@ -107,20 +107,25 @@ def get_evolution_items():
     """Fetch and parse evolution items from SSR-dehydrated HTML."""
     html = get_html(URL)
     if not html:
+        print(
+            "Error: Could not retrieve Evolutions data. Check your network connection and try again."
+        )
         return []
 
     blocks = _extract_blocks(html)
     evolutions = []
 
     for block in blocks:
-        evolutions.append({
-            "Name": _extract_name(block),
-            "Price": _extract_price(block),
-            "Requirements": _extract_requirements(block),
-            "Upgrades": _extract_upgrades(block),
-            "Expiration": _extract_expiration(block),
-            "Levels": _extract_levels(block),
-            "Players": _extract_players(block),
-        })
+        evolutions.append(
+            {
+                "Name": _extract_name(block),
+                "Price": _extract_price(block),
+                "Requirements": _extract_requirements(block),
+                "Upgrades": _extract_upgrades(block),
+                "Expiration": _extract_expiration(block),
+                "Levels": _extract_levels(block),
+                "Players": _extract_players(block),
+            }
+        )
 
     return evolutions

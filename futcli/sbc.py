@@ -35,6 +35,11 @@ def get_sbc_types():
 def get_sbc_items():
     """Group SBC items by category with formatted fields."""
     items = _fetch_all_sbc_items()
+    if not items:
+        print(
+            "Error: Could not retrieve SBC data. Check your network connection and try again."
+        )
+        return {}
     sbc_data = {}
 
     for item in items:
@@ -43,14 +48,16 @@ def get_sbc_items():
         repeatable = item.get("repeatabilityMode", "no")
         refresh_text = item.get("repeatRefreshIntervalText") or "-"
 
-        sbc_data.setdefault(category, []).append({
-            "Name": item["name"],
-            "New": "yes" if item.get("isNew") else "no",
-            "Price": f"{cost:,}" if cost else "0",
-            "Expiration": item.get("expiresIn", "-"),
-            "Challenges": str(item.get("challengesCount", 0)),
-            "Repeatable": repeatable,
-            "Refreshes": refresh_text,
-        })
+        sbc_data.setdefault(category, []).append(
+            {
+                "Name": item["name"],
+                "New": "yes" if item.get("isNew") else "no",
+                "Price": f"{cost:,}" if cost else "0",  # noqa: E231
+                "Expiration": item.get("expiresIn", "-"),
+                "Challenges": str(item.get("challengesCount", 0)),
+                "Repeatable": repeatable,
+                "Refreshes": refresh_text,
+            }
+        )
 
     return sbc_data

@@ -1,15 +1,16 @@
 import argparse
 import json
+from importlib.metadata import PackageNotFoundError
+from importlib.metadata import version as get_version
 
-import pkg_resources
 from tabulate import tabulate
 
 from .evolutions import get_evolution_items
 from .sbc import get_sbc_items
 
 try:
-    version = pkg_resources.require("futcli")[0].version
-except pkg_resources.DistributionNotFound:
+    version = get_version("futcli")
+except PackageNotFoundError:
     version = "unknown"
 
 
@@ -34,14 +35,21 @@ def get_output(data_type, option, output_format):
             print("Invalid SBC option.")
     elif data_type == "evolutions":
         evolutions_data = get_evolution_items()
-        formatted_evolutions = []
-        for item in evolutions_data:
-            formatted_item = {
-                key: (json.dumps(value, indent=4) if isinstance(value, dict) else value)
-                for key, value in item.items()
-            }
-            formatted_evolutions.append(formatted_item)
-        format_output(formatted_evolutions, output_format)
+        if output_format == "json":
+            format_output(evolutions_data, output_format)
+        else:
+            formatted_evolutions = []
+            for item in evolutions_data:
+                formatted_item = {
+                    key: (
+                        json.dumps(value, indent=4)
+                        if isinstance(value, dict)
+                        else value
+                    )
+                    for key, value in item.items()
+                }
+                formatted_evolutions.append(formatted_item)
+            format_output(formatted_evolutions, output_format)
     else:
         print("Invalid data type.")
 
@@ -68,7 +76,14 @@ def futcli():
     subparsers = parser.add_subparsers(
         dest="data_type", title="args", metavar="[sbc.{options}, evolutions]"
     )
-    sbc_categories = ["challenges", "foundations", "icons", "players", "swaps", "upgrades"]
+    sbc_categories = [
+        "challenges",
+        "foundations",
+        "icons",
+        "players",
+        "swaps",
+        "upgrades",
+    ]
     for sbc_type in sbc_categories:
         subparsers.add_parser(f"sbc.{sbc_type}", help=f"Outputs list of SBC {sbc_type}")
     subparsers.add_parser("sbc", help="Outputs list of all SBC types")
@@ -84,6 +99,8 @@ def futcli():
             option = None
 
         get_output(data_type, option, args.output)
+    else:
+        parser.print_help()
 
 
 if __name__ == "__main__":
